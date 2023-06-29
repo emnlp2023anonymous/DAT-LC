@@ -40,6 +40,7 @@ bash trainer_with_config.sh config_summary/train/dat.yaml
 ```
 
 ### Training Seq-MAP model
+**NOTE**: The Seq-MAP method is mainly implemented [here](https://github.com/emnlp2023anonymous/DAT-LC/blob/b8b3e78c7a5eb8e7ebdf7951cfed35721f6c400c/code/fs_plugins/models/glat_decomposed_with_link.py#L1231).
 ```bash
 # Under `code` dir
 bash trainer_with_config.sh config_summary/reranker/dat_reranker_decoder_rouge_20_5.ymal
