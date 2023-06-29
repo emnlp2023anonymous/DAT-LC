@@ -1258,66 +1258,9 @@ class GlatDecomposedLink(FairseqNATModel):
                     if reranker_progressive_method != 'none':
                         rerank_method = reranker_progressive_method
                                         
-                    if rerank_method == "bleu":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_bleu(encoder_out['src_tokens'][0].cpu().numpy(), new_beams.cpu().numpy())
-                        rereanking_score = torch.tensor(pre_rereanking_score + 0.01).to(device).log()
-                    elif rerank_method == "rouge":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_rouge(self.rouge, encoder_out['src_tokens'][0].cpu().numpy(), new_beams.cpu().numpy())
-                        rereanking_score = torch.tensor(pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                    elif rerank_method == "ngram":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_ngram(new_beams.cpu().numpy(), self.id2word, self.ngram_model)
-                        rereanking_score = torch.tensor(pre_rereanking_score).to(device).exp()
-                    elif "oracle" in rerank_method:
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        if rerank_method == "oracle_bleu":
-                            pre_rereanking_score = reranker_bleu(kwargs['target'].cpu().numpy(), new_beams.cpu().numpy())
-                            rereanking_score = torch.tensor(pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                        elif rerank_method == "oracle_rouge":
-                            pre_rereanking_score = reranker_rouge(self.rouge, kwargs['target'].cpu().numpy(), new_beams.cpu().numpy())
-                            rereanking_score = torch.tensor(pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                        else:
-                            pre_rereanking_score = reranker_lev(self.libnat, kwargs['target'], new_beams)
-                            rereanking_score = (pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                    elif rerank_method == "lev":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_lev(self.libnat, encoder_out['src_tokens'][0], new_beams)
-                        # rereanking_score = reranker_lev(self.libnat, encoder_out['src_tokens'][0], new_beams)  + 0.001
-                        rereanking_score = (pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                    elif rerank_method == "bert":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_bert(encoder_out['src_tokens'][0], new_beams, self, device)
-                        # rereanking_score = reranker_lev(self.libnat, encoder_out['src_tokens'][0], new_beams)  + 0.001
-                        rereanking_score = (pre_rereanking_score + 0.01).to(device).log().clamp(min=-100)
-                    elif rerank_method == "progressive_bert_train":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = None
-                        # rereanking_score = reranker_lev(self.libnat, encoder_out['src_tokens'][0], new_beams)  + 0.001
-                        rereanking_score = None
-                    elif rerank_method == "progressive_bert_inference":
-                        new_beams = torch.cat((G[i-1][j-1].beams.repeat(1, K_vocab, 1),
-                                           P_topK_idx[:,j,:].repeat_interleave(K, dim=1).unsqueeze(2)), dim=2)
-                        pre_rereanking_score = reranker_bert_v3(encoder_out['src_tokens'][0], new_beams, self, device)
-                        # rereanking_score = reranker_lev(self.libnat, encoder_out['src_tokens'][0], new_beams)  + 0.001
-                        rereanking_score = pre_rereanking_score.softmax(dim=-1)
-                    else:
-                        rereanking_score = None
-                        new_beams = None
-                        pre_rereanking_score = None
-
-                    if rereanking_score is not None:
-                        rereanking_score = rereanking_score.reshape(bsz, K_vocab, K).permute(0, 2, 1)
-                    else:
-                        rereanking_score = 0
+                    rereanking_score = 0
+                    new_beams = None
+                    pre_rereanking_score = None
                         
                     next_prob_score = P_topK_score[:,j,:].unsqueeze(1) + TScore
                     next_score_for_rerank = next_prob_score + rerank_lambda * rereanking_score
@@ -1369,32 +1312,8 @@ class GlatDecomposedLink(FairseqNATModel):
                         unpad_output_tokens.append(G[one_pred_length][-1].beams[i, 0])
                     else:
                         new_beams = G[one_pred_length][-1].beams[i].unsqueeze(0)
-                        if rerank_method == "final_rouge":
-                            pre_rereanking_score = reranker_rouge(self.rouge, kwargs['target'][i].unsqueeze(0).cpu().numpy(), new_beams.cpu().numpy())
-                        elif rerank_method == "final_bert":
-                            pre_rereanking_score = reranker_bert(encoder_out['src_tokens'][0][i], new_beams, self, device)
-                        elif rerank_method == "final_bert_v2":
-                            pre_rereanking_score = reranker_bert_v2(encoder_out['src_tokens'][0][i], new_beams, self, device)
-                        elif rerank_method == "final_bert_v3":
+                        if rerank_method == "final_bert_v3":
                             pre_rereanking_score = reranker_bert_v3(encoder_out['src_tokens'][0][i].unsqueeze(0), new_beams, self, device)
-                        elif rerank_method == "final_bleu":
-                            pre_rereanking_score = reranker_bleu(kwargs['target'][i].unsqueeze(0).cpu().numpy(), new_beams.cpu().numpy(), self)
-                        elif rerank_method == "final_prob": 
-                            pre_rereanking_score = G[one_pred_length][-1].score[i].logsumexp(0)
-                        elif rerank_method == "final_ngram":
-                            pre_rereanking_score = reranker_ngram(new_beams.cpu().numpy(), self.id2word, self.ngram_model)
-                        elif rerank_method == "final_top1": 
-                            pre_rereanking_score = torch.tensor([0])
-                        elif rerank_method == "final_debug":
-                            rouge_rereanking_best_idx = reranker_rouge(self.rouge, kwargs['target'][i].unsqueeze(0).cpu().numpy(), new_beams.cpu().numpy()).argmax()
-                            prob_rereanking_best_idx = G[one_pred_length][-1].score[i].logsumexp(0).argmax()
-                            bert_reranking_score = reranker_bert(encoder_out['src_tokens'][0][i], new_beams, self, device)
-                            bert_reranking_best_idx = bert_reranking_score.argmax()
-                            
-                            print(int(prob_rereanking_best_idx), int(rouge_rereanking_best_idx), int(bert_reranking_best_idx))
-                            unpad_output_tokens.append(_postprocess(G[one_pred_length][-1].beams[i]))
-                            reranking_score_list.append(bert_reranking_score)
-                            continue
                             
                         if return_beam_and_score:
                             unpad_output_tokens.append(_postprocess(G[one_pred_length][-1].beams[i]))                
