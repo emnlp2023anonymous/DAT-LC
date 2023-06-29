@@ -1058,62 +1058,7 @@ class GlatDecomposedLink(FairseqNATModel):
             output_tokens = [res + [self.tgt_dict.pad_index] * (output_seqlen - len(res)) for res in unpad_output_tokens]
             output_tokens = torch.tensor(output_tokens, device=decoder_out.output_tokens.device, dtype=decoder_out.output_tokens.dtype)
         
-        elif decode_strategy in ["length_control_bs"]:                
-            def get_length_by_lookahead_deocoding():
-                output_length = torch.sum(output_tokens.ne(self.tgt_dict.pad_index), dim=-1).tolist()
-                links_idx = (links + unreduced_logits.unsqueeze(1) * self.args.decode_beta).max(dim=-1)[1].cpu().tolist() # batch * prelen
-                unpad_output_tokens = []
-                for i, length in enumerate(output_length):
-                    last = unreduced_tokens[i][0]
-                    j = 0
-                    res = [last]
-                    while j != length - 1:
-                        j = links_idx[i][j]
-                        now_token = unreduced_tokens[i][j]
-                        if now_token != self.tgt_dict.pad_index and now_token != last:
-                            res.append(now_token)
-                        last = now_token
-                    unpad_output_tokens.append(res)
-                return torch.tensor([len([_x for _x in x if _x not in [0, 1, 2]]) for x in unpad_output_tokens]).to(output_tokens), unpad_output_tokens
-            
-            def get_length_by_bs_decoding():
-                batch_size, prelen, _ = links.shape
-
-                assert batch_size <= self.args.decode_max_batchsize, "Please set --decode-max-batchsize for beamsearch with a larger batch size"
-
-                top_logits, top_logits_idx = output_logits.log_softmax(dim=-1).topk(self.args.decode_top_cand_n, dim=-1)
-                dagscores_arr = (links.unsqueeze(-1) + top_logits.unsqueeze(1) * self.args.decode_beta)  # batch * prelen * prelen * top_cand_n
-                dagscores, top_cand_idx = dagscores_arr.reshape(batch_size, prelen, -1).topk(self.args.decode_top_cand_n, dim=-1) # batch * prelen * top_cand_n
-
-                nextstep_idx = torch.div(top_cand_idx, self.args.decode_top_cand_n, rounding_mode="floor") # batch * prelen * top_cand_n
-                logits_idx_idx = top_cand_idx % self.args.decode_top_cand_n # batch * prelen * top_cand_n
-                idx1 = torch.arange(batch_size, device=links.device).unsqueeze(-1).unsqueeze(-1).expand(*nextstep_idx.shape)
-                logits_idx = top_logits_idx[idx1, nextstep_idx, logits_idx_idx] # batch * prelen * top_cand_n
-
-                rearange_idx = logits_idx.sort(dim=-1)[1]
-                dagscores = dagscores.gather(-1, rearange_idx) # batch * prelen * top_cand_n
-                nextstep_idx = nextstep_idx.gather(-1, rearange_idx) # batch * prelen * top_cand_n
-                logits_idx = logits_idx.gather(-1, rearange_idx) # batch * prelen * top_cand_n
-                
-                dagscores = np.ascontiguousarray(dagscores.cpu().numpy())
-                nextstep_idx = np.ascontiguousarray(nextstep_idx.int().cpu().numpy())
-                logits_idx = np.ascontiguousarray(logits_idx.int().cpu().numpy())
-                output_length_cpu = np.ascontiguousarray(output_length.int().cpu().numpy())
-
-                res, score = self.dag_search.dag_search(dagscores, nextstep_idx, logits_idx,
-                    output_length_cpu,
-                    self.args.decode_alpha,
-                    self.args.decode_gamma,
-                    self.args.decode_beamsize,
-                    self.args.decode_max_beam_per_length,
-                    self.args.decode_top_p,
-                    self.tgt_dict.pad_index,
-                    self.tgt_dict.bos_index,
-                    1 if self.args.decode_dedup else 0
-                )
-                output_tokens = torch.tensor(res, device=decoder_out.output_tokens.device, dtype=decoder_out.output_tokens.dtype)
-                return torch.tensor([len([_x for _x in x if _x not in [0, 1, 2]]) for x in output_tokens]).to(output_tokens), output_tokens
-            
+        elif decode_strategy in ["length_control_bs"]:                          
                     
             def merge(G1, G2, not_rerank=False, j=None, encoder_out=None):
                 # bsz = G1.beams.size(0)
@@ -1193,8 +1138,6 @@ class GlatDecomposedLink(FairseqNATModel):
             specified_length_fixed = getattr(self.args, 'specified_length_fixed', None)
             specified_length_ratio = getattr(self.args, "specified_length_ratio", None)
             
-            not_force_length = getattr(self.args, "not_force_length", None)
-            
             if specified_length_fixed is not None:
                 new_length = torch.tensor(specified_length_fixed).expand_as(encoder_out['src_lengths'][0]).view(-1).to(device) - 1
             elif specified_length_ratio is not None:
@@ -1204,15 +1147,6 @@ class GlatDecomposedLink(FairseqNATModel):
             else:
                 new_length = torch.tensor(1).expand_as(encoder_out['src_lengths'][0]).view(-1).to(device) - 1
 
-            if not_force_length:
-                supposeed_predicted_length, supposeed_predicted_tokens = get_length_by_bs_decoding()
-
-                if getattr(self.args, "char_control_method", None) is None:
-                    not_force_length_cond1 = supposeed_predicted_length < new_length
-                    # not_force_length_cond2 = encoder_out['src_lengths'][0].view(-1) < new_length
-                    not_force_length_cond = not_force_length_cond1 #  torch.logical_and(not_force_length_cond1, not_force_length_cond2)
-                else:
-                    not_force_length_cond = torch.tensor([sum([self.id2len[int(_id)] for _id in item]) for item in supposeed_predicted_tokens]).to(output_tokens) < getattr(self.args, "char_control_limit", 50)
                 
             pred_length = new_length.view(-1)   
 
@@ -1339,16 +1273,6 @@ class GlatDecomposedLink(FairseqNATModel):
             
             if return_all_groups:
                 return G, pred_length
-            
-            if not_force_length:
-                merged_output = []
-                for i, not_force in enumerate(not_force_length_cond):
-                    if not_force:
-                        merged_output.append(supposeed_predicted_tokens[i])
-                    else:
-                        merged_output.append(unpad_output_tokens[i])
-
-                unpad_output_tokens = merged_output
             
             output_tokens = _postprocess(unpad_output_tokens)
 
