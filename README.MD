@@ -8,7 +8,21 @@
 In addition to the results reported in the paper, we also compare our Seq-MAP with three baseline models using [ChatGPT:gpt-3.5-turbo-0301](https://chat.openai.com/). Specifically, we compare our Seq-MAP with each of the baseline model. For each comparison, we give the ChatGPT the source text, the hypotesis of each of the models, and ask which one is better, or cannot decide. To reduce the impacts of the promts, our results are based on two prompts (listed the files under `prompts` folder). The results are shown in the following table.
 -->
 
-## Replication
+# Illustration of the proposed Seq-MAP algorithm (without reranking)
+
+
+We illusrate the algorithm with an example. Here, we consider generating $\mathcal G_{2,4}$ from $\mathcal G_{1,3}$, where we assume $K_m=2$ and $K_v=2$. 
+There are two major steps. 
+1. Expand $\mathcal G_{1,3}$ with the Top-$K_v$ words from $s=4$ step, which results in four beam items. 
+2. Merge $\mathcal G_{2,3}$ to $\mathcal G_{2,4}$.
+
+
+<img src="img/example.png" alt="drawing" width="1200"/>
+
+# Pseudo code of the proposed Seq-MAP algorithm (without reranking)
+<img src="img/algo.png" alt="drawing" width="600"/>
+
+# Replication
 ## Environment setup
 Our code based on the [FairSeq](https://github.com/facebookresearch/fairseq) library. Our code is written in PyTorch, and uses CUDA for GPU acceleration.
 To install the required packages, run the following command:
