@@ -13,7 +13,7 @@ In addition to the results reported in the paper, we also compare our Seq-MAP wi
 
 We illusrate the algorithm with an example. Here, we consider generating $\mathcal G_{2,4}$ from $\mathcal G_{1,3}$, where we assume $K_m=2$ and $K_v=2$. 
 There are two major steps. 
-1. Expand $\mathcal G_{1,3}$ with the Top-$K_v$ words from $s=4$ step, which results in four beam items. 
+1. Expand $\mathcal G_{1,3}$ with the Top - $K_v$ words to $s=4$ step, which results in four beam items. 
 2. Merge $\mathcal G_{2,3}$ to $\mathcal G_{2,4}$.
 
 
