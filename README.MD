@@ -17,7 +17,7 @@ There are two major steps.
 2. Merge $\mathcal G_{2,3}$ to $\mathcal G_{2,4}$.
 
 
-<img src="img/example.png" alt="drawing" width="1200"/>
+<img src="img/example.png" alt="drawing" width="600"/>
 
 # Pseudo code of the proposed Seq-MAP algorithm (without reranking)
 <img src="img/algo.png" alt="drawing" width="600"/>
